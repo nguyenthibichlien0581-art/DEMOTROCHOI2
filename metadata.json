@@ -1,0 +1,8 @@
+{
+  "name": "Remix: Hành Trình Năng Lượng: Khám Phá Khoa Học",
+  "description": "Một trò chơi khoa học tương tác lớp 6 về các dạng năng lượng và sự chuyển hóa năng lượng, điều khiển bằng cử chỉ đầu.",
+  "requestFramePermissions": [
+    "camera"
+  ],
+  "majorCapabilities": []
+}
