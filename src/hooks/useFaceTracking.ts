@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
 import { FaceMesh, Results } from '@mediapipe/face_mesh';
-import { Camera } from '@mediapipe/camera_utils';
 
 export type Gesture = 'LEFT' | 'RIGHT' | 'NOD' | 'NONE';
 
@@ -9,7 +8,8 @@ export const useFaceTracking = (videoElement: HTMLVideoElement | null) => {
   const [isLoaded, setIsLoaded] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const faceMeshRef = useRef<FaceMesh | null>(null);
-  const cameraRef = useRef<Camera | null>(null);
+  const requestRef = useRef<number | null>(null);
+  const streamRef = useRef<MediaStream | null>(null);
   const isInitializing = useRef(false);
   
   // For nod detection
@@ -21,6 +21,28 @@ export const useFaceTracking = (videoElement: HTMLVideoElement | null) => {
 
     isInitializing.current = true;
     let active = true;
+
+    const detect = async () => {
+      if (!active) return;
+
+      // 1. Sửa lỗi đứt vòng lặp: Bắt buộc gọi lại requestAnimationFrame để duy trì vòng lặp chờ
+      if (!faceMeshRef.current || !videoElement) {
+        requestRef.current = requestAnimationFrame(detect);
+        return;
+      }
+
+      // 2. Kiểm tra kích thước khung hình an toàn
+      if (videoElement.readyState >= 2 && videoElement.videoWidth > 0 && videoElement.videoHeight > 0) {
+        try {
+          // 4. Bắt lỗi (Error Handling): Bọc trong try...catch để không làm sập luồng nhận diện
+          await faceMeshRef.current.send({ image: videoElement });
+        } catch (err) {
+          console.error('AI Detection Frame Error:', err);
+        }
+      }
+
+      requestRef.current = requestAnimationFrame(detect);
+    };
 
     const initialize = async () => {
       try {
@@ -83,18 +105,27 @@ export const useFaceTracking = (videoElement: HTMLVideoElement | null) => {
 
         faceMeshRef.current = faceMesh;
 
-        const camera = new Camera(videoElement, {
-          onFrame: async () => {
-            if (active && faceMeshRef.current) {
-              await faceMeshRef.current.send({ image: videoElement });
-            }
-          },
-          width: 640,
-          height: 480,
+        // Khởi tạo Camera thủ công để kiểm soát luồng tốt hơn
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: { width: 640, height: 480 },
+          audio: false
+        });
+        
+        if (!active) {
+          stream.getTracks().forEach(track => track.stop());
+          return;
+        }
+
+        streamRef.current = stream;
+        videoElement.srcObject = stream;
+        
+        // Đảm bảo video bắt đầu phát
+        await videoElement.play().catch(err => {
+          console.warn('Autoplay prevented or video play error:', err);
         });
 
-        cameraRef.current = camera;
-        await camera.start();
+        // Bắt đầu vòng lặp nhận diện
+        requestRef.current = requestAnimationFrame(detect);
         
         if (active) {
           setIsLoaded(true);
@@ -115,8 +146,11 @@ export const useFaceTracking = (videoElement: HTMLVideoElement | null) => {
 
     return () => {
       active = false;
-      if (cameraRef.current) {
-        cameraRef.current.stop();
+      if (requestRef.current) {
+        cancelAnimationFrame(requestRef.current);
+      }
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach(track => track.stop());
       }
       if (faceMeshRef.current) {
         faceMeshRef.current.close();

@@ -43,8 +43,8 @@ export const WebcamTracker: React.FC<WebcamTrackerProps> = ({ onGesture, current
       <video 
         ref={videoRef}
         className="w-full h-full object-cover scale-x-[-1]"
-        playsInline
-        muted
+        playsInline={true}
+        muted={true}
       />
 
       <div className="absolute top-1/2 left-4 -translate-y-1/2 text-white font-black text-xs opacity-80 flex flex-col items-center">
